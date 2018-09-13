@@ -1,0 +1,11 @@
+server {
+    listen 80 default;
+    keepalive_timeout 10;
+
+    root <%= node['app']['dir']%>/apps/portal-app/dist;
+
+    location /api {
+       proxy_pass http://localhost:8080/user-portal/;
+       proxy_set_header Host $host;
+    }
+}

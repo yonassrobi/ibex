@@ -1,0 +1,178 @@
+#!/bin/bash
+DEFAULT_MODE="t"
+
+[[ $1 = "" ]] && MODE=$DEFAULT_MODE || MODE="$1"
+
+function usage {
+  printf "\033[1;31mArgument(s) error\033[0m\n"
+  echo "usage    : IBEX <mode> <project> <action> <environment> <region>"
+  echo "         : When mode t for terraform."
+  echo "         : Default project is live. Action can be init, plan, apply, graph, or destroy."
+  echo "example  : ./IBEX t init dev"
+
+  printf "\n     ------ OR ----------   \n\n"
+
+  echo "usage    : IBEX <mode> <action> <type> <version> [<region>]"
+  echo "         : When mode is p for packer."
+  echo "         : Action can be init, validate, inspect, or build."
+  echo "example  : ./IBEX p build web 0.0.1 us-east-1"
+}
+
+if [ $MODE == 't' ]
+then
+  DEFAULT_PROJECT="live"
+  DEFAULT_TYPE="t"
+  DEFAULT_ACTION="plan"
+  DEFAULT_BUCKET="..."
+  DEFAULT_REGION="us-east-1"
+  DEFAULT_ENV="dev"
+  DEFAULT_VARFILE="terraform.tfvars"
+  [[ $2 = "" ]] && PROJECT=$DEFAULT_PROJECT || PROJECT="$2"
+  [[ $3 = "" ]] && ACTION=$DEFAULT_ACTION || ACTION="$3"
+  [[ $4 = "" ]] && ENV=$DEFAULT_ENV || ENV="$4"
+  [[ $5 = "" ]] && REGION=$DEFAULT_REGION || REGION="$5"
+  [[ $6 = "" ]] && VARFILE=$DEFAULT_VARFILE || VARFILE="$6"
+  [[ $7 = "" ]] && BUCKET=$DEFAULT_BUCKET || BUCKET="$7"
+
+  PROJECT_DIR="./terraform/"$PROJECT
+
+  cat << "EOF"
+  .____________________________  ___
+  |   \______   \_   _____/\   \/  /
+  |   ||    |  _/|    __)_  \     /
+  |   ||    |   \|        \ /     \
+  |___||______  /_______  //___/\  \
+              \/        \/       \_/
+  __________________________________________    _____  ___________________ __________    _____
+  \__    ___/\_   _____/\______   \______   \  /  _  \ \_   _____/\_____  \\______   \  /     \
+    |    |    |    __)_  |       _/|       _/ /  /_\  \ |    __)   /   |   \|       _/ /  \ /  \
+    |    |    |        \ |    |   \|    |   \/    |    \|     \   /    |    \    |   \/    Y    \
+    |____|   /_______  / |____|_  /|____|_  /\____|__  /\___  /   \_______  /____|_  /\____|__  /
+                     \/         \/        \/         \/     \/            \/       \/         \/
+EOF
+elif [ $MODE == 'p' ]
+then
+  DEFAULT_PROJECT="live"
+  DEFAULT_ACTION="validate"
+  DEFAULT_TYPE="web"
+  DEFAULT_REGION="us-east-1"
+  DEFAULT_VERSION="0.0.1"
+  DEFAULT_BASE_IMAGE="..."
+
+  TIME=`date '+%m/%d/%Y %H:00'`
+  INSTANCE_TYPE="t2.micro"
+  SSH_USERNAME="ec2-user"
+  SOURCE_AMI_ACCOUNT="..."
+  SOURCE_AMI="..."
+  SOURCE_AMI_FILTER_NAME="ubuntu/images/*ubuntu-xenial-16.04-amd64-server-*"
+
+  PROJECT_DIR="./packer"
+
+  [[ $2 = "" ]] && ACTION=$DEFAULT_ACTION || ACTION="$2"
+  [[ $3 = "" ]] && TYPE=$DEFAULT_TYPE || TYPE="$3"
+  [[ $4 = "" ]] && VERSION=$DEFAULT_VERSION || VERSION="$4"
+  [[ $5 = "" ]] && REGION=$DEFAULT_REGION || REGION="$5"
+  [[ $6 = "" ]] && BASE_IMAGE=$DEFAULT_BASE_IMAGE || BASE_IMAGE="$6"
+  cat << "EOF"
+  .____________________________  ___
+  |   \______   \_   _____/\   \/  /
+  |   ||    |  _/|    __)_  \     /
+  |   ||    |   \|        \ /     \
+  |___||______  /_______  //___/\  \
+              \/        \/       \_/
+  __________  _____  _________  ____  __._____________________
+  \______   \/  _  \ \_   ___ \|    |/ _|\_   _____/\______   \
+   |     ___/  /_\  \/    \  \/|      <   |    __)_  |       _/
+   |    |  /    |    \     \___|    |  \  |        \ |    |   \
+   |____|  \____|__  /\______  /____|__ \/_______  / |____|_  /
+                   \/        \/        \/        \/         \/
+EOF
+else
+  usage
+fi
+
+
+function init {
+  printf "\e[1;35mRunning Terraform init for $PROJECT $ENV in $REGION with global/$REGION/$VARFILE and $PROJECT_DIR/$ENV/$REGION/$VARFILE\e[0m\n"
+  terraform init -backend-config="bucket=$BUCKET" -backend-config="key=$REGION-$PROJECT-$ENV.tfstate" \
+                 -backend-config="region=$REGION" -backend=true -get=true -input=false  \
+                 -backend-config="encrypt=true" $PROJECT_DIR
+}
+
+function plan {
+  init
+  printf "\e[1;35mRunning Terraform plan\e[0m\n"
+  terraform plan -var-file="$PROJECT_DIR/global/$REGION/$VARFILE" -var-file=$PROJECT_DIR/$ENV/$REGION/$VARFILE $PROJECT_DIR
+}
+
+function apply {
+  plan
+  printf "\e[1;35mRunning Terraform apply\e[0m\n"
+  terraform apply -var-file="$PROJECT_DIR/global/$REGION/$VARFILE" -var-file=$PROJECT_DIR/$ENV/$REGION/$VARFILE $PROJECT_DIR
+}
+
+function graph {
+  plan
+  printf "\e[1;35mRunning Terraform graph\e[0m\n"
+  terraform graph -type=plan $PROJECT_DIR/$ENV | dot -Tpng > plan.png
+}
+
+function destroy {
+  plan
+  printf "\e[1;31mRunning Terraform destroy\e[0m\n"
+  terraform destroy -var-file="$PROJECT_DIR/global/$REGION/$VARFILE" -var-file=$PROJECT_DIR/$ENV/$REGION/$VARFILE $PROJECT_DIR
+}
+
+function update_input_variables {
+
+  mkdir -p $PROJECT_DIR/$TYPE/variables/$REGION/
+  touch $PROJECT_DIR/$TYPE/variables/$REGION/input.json
+  cat <<EOF > $PROJECT_DIR/$TYPE/variables/$REGION/input.json
+{
+    "version": "$VERSION",
+    "source_ami_filter_name": "$SOURCE_AMI_FILTER_NAME",
+    "source_ami_account": "$SOURCE_AMI_ACCOUNT",
+    "source_ami": "$SOURCE_AMI",
+    "ami_name": "$TYPE-custom-ami-$VERSION",
+    "region": "$REGION",
+    "vpc": "$VPC",
+    "subnet": "$SUBNET",
+    "project": "$PROJECT",
+    "created": "$TIME",
+    "instance_type": "$INSTANCE_TYPE",
+    "ssh_username":"$SSH_USERNAME"
+}
+EOF
+
+}
+
+function validate {
+  printf "\e[1;35mRunning Packer validate\e[0m\n"
+  update_input_variables
+  packer validate -var-file=$PROJECT_DIR/$TYPE/variables/$REGION/input.json $PROJECT_DIR/$TYPE/template.json
+}
+
+function build {
+  validate
+  printf "\e[1;35mRunning Packer build\e[0m\n"
+  packer build -var-file=$PROJECT_DIR/$TYPE/variables/$REGION/input.json $PROJECT_DIR/$TYPE/template.json
+}
+
+
+if [ $MODE == 't' ]
+then
+  case "$ACTION" in
+   "init")     init     ;;
+   "plan")     plan     ;;
+   "apply")    apply    ;;
+   "graph")    graph    ;;
+   "destroy")  destroy  ;;
+   *)          usage    ;;
+  esac
+else
+  case "$ACTION" in
+   "validate") validate ;;
+   "build")    build    ;;
+   *)          usage    ;;
+  esac
+fi

@@ -1,0 +1,74 @@
+{
+  "variables": {
+    "ami_name": "",
+    "region": "",
+    "instance_type": "",
+    "ami_filter_name": "",
+    "source_ami_account": "",
+    "ssh_username": "",
+    "project": "",
+    "created": "",
+    "version": "",
+    "source_ami": "",
+    "vpc": "",
+    "subnet": ""
+  },
+  "builders": [{
+    "type": "amazon-ebs",
+    "region": "{{user `region`}}",
+    "source_ami": "{{user `source_ami`}}",
+    "run_tags": {
+        "Name": "Packer Builder",
+        "Project": "{{user `project`}}",
+        "Version": "{{user `version`}}",
+        "Created": "{{user `created`}}"
+    },
+    "tags": {
+        "Name": "{{user `ami_name`}}",
+        "Project": "{{user `project`}}",
+        "Version": "{{user `version`}}",
+        "Created": "{{user `created`}}",
+        "Source": "{{user `source_ami`}}"
+    },
+    "instance_type": "{{user `instance_type`}}",
+    "ssh_username": "{{user `ssh_username`}}",
+    "ssh_pty": true,
+    "ami_name": "{{user `ami_name`}}",
+    "vpc_id": "{{user `vpc`}}",
+    "subnet_id": "{{user `subnet`}}"
+  }],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": "echo \"Welcome!\" "
+    },
+    {
+      "type": "chef-solo",
+      "cookbook_paths": ["packer/web/cookbooks"],
+      "run_list": [ "recipe[nginx]", "recipe[web]", "recipe[web::deploy]" ],
+      "json": {
+        "app": {
+            "name": "web",
+            "dir": "/var/data",
+            "repo": "https://github.com/only2dhir/spring-boot-angular5.git"
+          },
+          "user":{
+            "name": "vagrant"
+          },
+          "nginx": {
+            "version": "1.14.0",
+            "dir": "/etc/nginx",
+            "default_site_enabled": true,
+            "install_method": "repo",
+            "source": {
+              "modules": ["http_gzip_static_module", "http_ssl_module"]
+            }
+          },
+          "nodejs":{
+            "install_method": "repo",
+            "version": "10.1.0"
+          }
+      }
+    }
+  ]
+}

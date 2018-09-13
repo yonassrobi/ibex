@@ -1,0 +1,56 @@
+{
+  "variables": {
+    "ami_name": "",
+    "region": "",
+    "instance_type": "",
+    "ami_filter_name": "",
+    "source_ami_account": "",
+    "ssh_username": "",
+    "project": "",
+    "created": "",
+    "version": "",
+    "source_ami": "",
+    "vpc": "",
+    "subnet": ""
+  },
+  "builders": [{
+    "type": "amazon-ebs",
+    "region": "{{user `region`}}",
+    "source_ami": "{{user `source_ami`}}",
+    "run_tags": {
+        "Name": "Packer Builder",
+        "Project": "{{user `project`}}",
+        "Version": "{{user `version`}}",
+        "Created": "{{user `created`}}"
+    },
+    "tags": {
+        "Name": "{{user `ami_name`}}",
+        "Project": "{{user `project`}}",
+        "Version": "{{user `version`}}",
+        "Created": "{{user `created`}}",
+        "Source": "{{user `source_ami`}}"
+    },
+    "instance_type": "{{user `instance_type`}}",
+    "ssh_username": "{{user `ssh_username`}}",
+    "ssh_pty": true,
+    "ami_name": "{{user `ami_name`}}",
+    "vpc_id": "{{user `vpc`}}",
+    "subnet_id": "{{user `subnet`}}"
+  }],
+  "provisioners": [
+    {
+      "type": "chef-solo",
+      "cookbook_paths": ["packer/data/cookbooks"],
+      "run_list": [ "mongodb" , "data"],
+      "json": {
+        "app": {
+          "name": "data",
+          "dir": "/var/data"
+        },
+        "user":{
+          "name": "vagrant"
+        }
+      }
+    }
+  ]
+}
